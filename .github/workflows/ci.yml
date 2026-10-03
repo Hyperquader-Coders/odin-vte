@@ -1,0 +1,103 @@
+# `make ci` is the whole gate: the same steps, in the same order.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# The jobs only read the repository.
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-24.04
+    # Sibling bindings are checked out inside the workspace, not beside it as on a dev machine.
+    env:
+      VTE_STAGE: amber-vte/build/vte/stage
+      GLIB: odin-glib
+      CAIRO: odin-cairo
+      PANGO: odin-pango
+      GRAPHENE: odin-graphene
+      PIXBUF: odin-gdk-pixbuf
+      GTK4: odin-gtk4
+    steps:
+      - uses: actions/checkout@v4
+
+      # Public sibling binding.
+      - name: odin-glib
+        uses: actions/checkout@v4
+        with:
+          repository: Hyperquader-Coders/odin-glib
+          path: odin-glib
+
+      # Public sibling binding.
+      - name: odin-cairo
+        uses: actions/checkout@v4
+        with:
+          repository: Hyperquader-Coders/odin-cairo
+          path: odin-cairo
+
+      # Public sibling binding.
+      - name: odin-pango
+        uses: actions/checkout@v4
+        with:
+          repository: Hyperquader-Coders/odin-pango
+          path: odin-pango
+
+      # Public sibling binding.
+      - name: odin-graphene
+        uses: actions/checkout@v4
+        with:
+          repository: Hyperquader-Coders/odin-graphene
+          path: odin-graphene
+
+      # Public sibling binding.
+      - name: odin-gdk-pixbuf
+        uses: actions/checkout@v4
+        with:
+          repository: Hyperquader-Coders/odin-gdk-pixbuf
+          path: odin-gdk-pixbuf
+
+      # Public sibling binding.
+      - name: odin-gtk4
+        uses: actions/checkout@v4
+        with:
+          repository: Hyperquader-Coders/odin-gtk4
+          path: odin-gtk4
+
+      # amber-vte builds VTE 0.84.1; the tests link and load that, so the 0.84-only calls run.
+      - name: amber-vte
+        uses: actions/checkout@v4
+        with:
+          repository: Hyperquader-Coders/amber-vte
+          path: amber-vte
+
+      - name: system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvte-2.91-gtk4-dev pkg-config shellcheck \
+            meson ninja-build gperf g++-14 liblz4-dev libsystemd-dev libdrm-dev \
+            libgnutls28-dev libicu-dev libpcre2-dev libfribidi-dev
+
+      - name: VTE version
+        id: vte
+        run: echo "v=$(sed -n 's/^VERSION *= *//p' amber-vte/Makefile)-${{ hashFiles('amber-vte/patches/*.patch') }}" >> "$GITHUB_OUTPUT"
+
+      - name: cache VTE
+        id: vte-cache
+        uses: actions/cache@v4
+        with:
+          path: amber-vte/build/vte/stage
+          key: vte-${{ steps.vte.outputs.v }}-${{ runner.os }}
+
+      - name: build VTE
+        if: steps.vte-cache.outputs.cache-hit != 'true'
+        run: make -C amber-vte vte
+
+      - uses: Hyperquader-Coders/setup-amber-odin@v1
+
+      - name: make ci
+        run: make ci
